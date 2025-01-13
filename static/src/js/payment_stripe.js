@@ -31,7 +31,6 @@ patch(PaymentStripe.prototype, {
         if (line.amount < 0) {
             if ('stripePI' in this.pos.get_order()) {
                 const piid = this.pos.get_order().stripePI; //stripePI set from the refund screen (ticket_screen.js)
-                line.amount = -line.amount // refund expects a postive amount to refund
                 if (this.refundPayment(piid, line) ) {
                     line.set_payment_status("done");
                     return true;
@@ -110,22 +109,21 @@ patch(PaymentStripe.prototype, {
     },
 
     async refundPayment(paymentIntentId, line) {
-        var amount = this.CurrencyToStripe(line.amount)
+        var amount = this.CurrencyToStripe(-line.amount) //refund api expects positive number so we negate the negative amount
         try {
+            // debugger;
             const data = await this.env.services.orm.silent.call(
                 "pos.payment.method",
                 "stripe_refund",
                 [[paymentIntentId], amount]
             );
             if (data.error) {
-                line.amount = -line.amount;
                 line.set_payment_status("retry");
                 throw data.error;
                 return false;
             }
             return data;
         } catch (error) {
-            line.amount = -line.amount;
             line.set_payment_status("retry");
             const message = error.code === 200 ? error.data.message : error.message;
             this._showError(message, 'Refund Payment');
